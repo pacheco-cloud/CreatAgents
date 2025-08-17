@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # Frontend Next.js
+  frontend:
+    build: ./apps/frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./apps/frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api-gateway
+
+  # API Gateway
+  api-gateway:
+    build: ./apps/services/api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+    depends_on:
+      - orchestrator-agent
+      - calendar-service
+      - user-settings-service
+
+  # Orchestrator Agent (Pydantic AI)
+  orchestrator-agent:
+    build: ./apps/services/orchestrator-agent
+    ports:
+      - "8001:8001"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PYTHONPATH=/app
+
+  # Calendar Service
+  calendar-service:
+    build: ./apps/services/calendar-service
+    ports:
+      - "8002:8002"
+    environment:
+      - PYTHONPATH=/app
+
+  # User Settings Service  
+  user-settings-service:
+    build: ./apps/services/user-settings-service
+    ports:
+      - "8003:8003"
+    environment:
+      - PYTHONPATH=/app
+
+  # Tool Factory Service
+  tool-factory-service:
+    build: ./apps/services/tool-factory-service
+    ports:
+      - "8004:8004"
+    environment:
+      - PYTHONPATH=/app
+
+  # Redis (para cache e filas futuras)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  # PostgreSQL (para persistência futura)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=agente_db
+      - POSTGRES_USER=agente_user
+      - POSTGRES_PASSWORD=agente_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
