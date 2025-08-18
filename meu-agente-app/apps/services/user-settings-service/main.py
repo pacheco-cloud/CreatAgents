@@ -1,193 +1,159 @@
-# apps/services/user-settings-service/database.py
-from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean, JSON, DateTime, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from datetime import datetime
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+import json
 import os
-import time
 import logging
-from typing import Optional
 
-# Configure logging
+# Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Database URL - Docker compatible
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql://agente_user:agente_pass@postgres:5432/agente_db"  # Docker service name
-)
+# Log da URL do banco de dados para debug
+db_url = os.getenv("DATABASE_URL", "postgresql://agente_user:agente_pass@postgres:5432/agente_db")
+logger.info(f"Database URL: {db_url}")
 
-logger.info(f"Database URL: {DATABASE_URL}")
+app = FastAPI(title="User Settings Service", version="1.0.0")
 
-# SQLAlchemy configuration
-engine = create_engine(
-    DATABASE_URL, 
-    echo=False,
-    pool_pre_ping=True,
-    pool_recycle=300,
-    pool_size=10,
-    max_overflow=20
-)
+class Tool(BaseModel):
+    name: str
+    description: str
+    apiEndpoint: str
+    parameters: List[Dict[str, Any]]
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+class Agent(BaseModel):
+    id: Optional[int] = None
+    name: str
+    type: str
+    isDefault: bool = False
+    systemPrompt: str
+    tools: List[Tool]
 
-# Dependency for database sessions
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Agentes padrão do sistema
+DEFAULT_AGENTS = [
+    Agent(
+        id=1,
+        name="Calendário Pessoal",
+        type="Pessoal", 
+        isDefault=True,
+        systemPrompt="Você é um assistente de agenda pessoal. Ajude com compromissos pessoais, eventos familiares e atividades de lazer.",
+        tools=[{
+            "name": "consultar_agenda_pessoal",
+            "description": "Consulta eventos na agenda pessoal do usuário",
+            "apiEndpoint": "/api/calendar/personal",
+            "parameters": [
+                {"name": "data_inicio", "type": "data"},
+                {"name": "data_fim", "type": "data"}
+            ]
+        }]
+    ),
+    Agent(
+        id=2,
+        name="Calendário Profissional",
+        type="Profissional",
+        isDefault=True,
+        systemPrompt="Você é um assistente de agenda profissional. Ajude com reuniões, projetos e compromissos de trabalho.",
+        tools=[{
+            "name": "consultar_agenda_profissional",
+            "description": "Consulta eventos na agenda profissional do usuário",
+            "apiEndpoint": "/api/calendar/professional",
+            "parameters": [
+                {"name": "data_inicio", "type": "data"},
+                {"name": "data_fim", "type": "data"}
+            ]
+        }]
+    )
+]
 
-# Agent Model
-class AgentModel(Base):
-    __tablename__ = "agents"
+# Armazenamento em memória para desenvolvimento
+CUSTOM_AGENTS = []
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "user-settings-service"}
+
+@app.get("/agents")
+async def get_agents() -> List[Agent]:
+    """Retorna todos os agentes (padrão + customizados)"""
+    return DEFAULT_AGENTS + CUSTOM_AGENTS
+
+@app.get("/agents/{agent_id}")
+async def get_agent(agent_id: int) -> Agent:
+    """Retorna um agente específico"""
+    all_agents = DEFAULT_AGENTS + CUSTOM_AGENTS
+    agent = next((a for a in all_agents if a.id == agent_id), None)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agente não encontrado")
+    return agent
+
+@app.post("/agents")
+async def create_agent(agent: Agent) -> Agent:
+    """Cria um novo agente customizado"""
+    # Gerar novo ID
+    all_agents = DEFAULT_AGENTS + CUSTOM_AGENTS
+    max_id = max([a.id for a in all_agents if a.id], default=0)
+    agent.id = max_id + 1
     
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=False, index=True)
-    type = Column(String(20), nullable=False)
-    system_prompt = Column(Text, nullable=False)
-    tools = Column(JSON, nullable=True, default=list)
-    is_default = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    # Agentes customizados não podem ser padrão
+    agent.isDefault = False
     
-    def __repr__(self):
-        return f"<Agent(id={self.id}, name='{self.name}', type='{self.type}')>"
+    CUSTOM_AGENTS.append(agent)
+    return agent
 
-# Tool Model
-class ToolModel(Base):
-    __tablename__ = "tools"
+@app.put("/agents/{agent_id}")
+async def update_agent(agent_id: int, agent_data: Agent) -> Agent:
+    """Atualiza um agente customizado"""
+    # Não permite editar agentes padrão
+    if agent_id <= 2:
+        raise HTTPException(status_code=400, detail="Não é possível editar agentes padrão")
     
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=False, unique=True, index=True)
-    description = Column(Text, nullable=False)
-    api_endpoint = Column(String(200), nullable=False)
-    parameters = Column(JSON, nullable=True, default=list)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    agent_index = next((i for i, a in enumerate(CUSTOM_AGENTS) if a.id == agent_id), None)
+    if agent_index is None:
+        raise HTTPException(status_code=404, detail="Agente não encontrado")
     
-    def __repr__(self):
-        return f"<Tool(id={self.id}, name='{self.name}')>"
+    agent_data.id = agent_id
+    agent_data.isDefault = False
+    CUSTOM_AGENTS[agent_index] = agent_data
+    return agent_data
 
-def wait_for_db(max_retries=30, delay=2):
-    """Wait for database to be available"""
-    for attempt in range(max_retries):
-        try:
-            with engine.connect() as connection:
-                connection.execute(text("SELECT 1"))
-            logger.info("✅ Database connection established!")
-            return True
-        except Exception as e:
-            logger.warning(f"⏳ Database not ready (attempt {attempt + 1}/{max_retries}): {e}")
-            if attempt < max_retries - 1:
-                time.sleep(delay)
-            else:
-                logger.error("❌ Database connection failed after all retries")
-                return False
-    return False
-
-def create_tables():
-    """Create all tables"""
-    try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("✅ Tables created successfully!")
-        return True
-    except Exception as e:
-        logger.error(f"❌ Error creating tables: {e}")
-        return False
-
-def test_connection():
-    """Test database connection"""
-    try:
-        with engine.connect() as connection:
-            result = connection.execute(text("SELECT 1"))
-            result.fetchone()
-        logger.info("✅ Database connection test passed!")
-        return True
-    except Exception as e:
-        logger.error(f"❌ Database connection test failed: {e}")
-        return False
-
-def initialize_database():
-    """Initialize database with retry logic"""
-    logger.info("🔧 Initializing database...")
+@app.delete("/agents/{agent_id}")
+async def delete_agent(agent_id: int):
+    """Remove um agente customizado"""
+    # Não permite deletar agentes padrão
+    if agent_id <= 2:
+        raise HTTPException(status_code=400, detail="Não é possível deletar agentes padrão")
     
-    # Wait for database to be available
-    if not wait_for_db():
-        raise Exception("Database is not available")
+    agent_index = next((i for i, a in enumerate(CUSTOM_AGENTS) if a.id == agent_id), None)
+    if agent_index is None:
+        raise HTTPException(status_code=404, detail="Agente não encontrado")
     
-    # Create tables
-    if not create_tables():
-        raise Exception("Failed to create tables")
-    
-    # Test connection
-    if not test_connection():
-        raise Exception("Database connection test failed")
-    
-    logger.info("✅ Database initialized successfully!")
+    del CUSTOM_AGENTS[agent_index]
+    return {"message": "Agente removido com sucesso"}
 
-def create_default_agents():
-    """Create default agents if they don't exist"""
-    db = SessionLocal()
-    try:
-        # Check if default agents already exist
-        existing_defaults = db.query(AgentModel).filter(AgentModel.is_default == True).count()
-        
-        if existing_defaults == 0:
-            logger.info("📝 Creating default agents...")
-            
-            # Personal agent
-            personal_agent = AgentModel(
-                name="Calendário Pessoal",
-                type="Pessoal",
-                system_prompt="Você é um assistente de agenda pessoal. Ajude com compromissos pessoais, eventos familiares e atividades de lazer.",
-                tools=[{
-                    "name": "consultar_agenda_pessoal",
-                    "description": "Consulta eventos na agenda pessoal do usuário",
-                    "apiEndpoint": "/api/calendar/personal",
-                    "parameters": [
-                        {"name": "data_inicio", "type": "data"},
-                        {"name": "data_fim", "type": "data"}
-                    ]
-                }],
-                is_default=True
-            )
-            
-            # Professional agent
-            professional_agent = AgentModel(
-                name="Calendário Profissional",
-                type="Profissional",
-                system_prompt="Você é um assistente de agenda profissional. Ajude com reuniões, projetos e compromissos de trabalho.",
-                tools=[{
-                    "name": "consultar_agenda_profissional",
-                    "description": "Consulta eventos na agenda profissional do usuário",
-                    "apiEndpoint": "/api/calendar/professional",
-                    "parameters": [
-                        {"name": "data_inicio", "type": "data"},
-                        {"name": "data_fim", "type": "data"}
-                    ]
-                }],
-                is_default=True
-            )
-            
-            db.add(personal_agent)
-            db.add(professional_agent)
-            db.commit()
-            
-            logger.info("✅ Default agents created successfully!")
-        else:
-            logger.info(f"ℹ️ Default agents already exist ({existing_defaults} found)")
-            
-    except Exception as e:
-        logger.error(f"❌ Error creating default agents: {e}")
-        db.rollback()
-        raise
-    finally:
-        db.close()
+@app.post("/agents/{agent_id}/duplicate")
+async def duplicate_agent(agent_id: int) -> Agent:
+    """Duplica um agente existente"""
+    all_agents = DEFAULT_AGENTS + CUSTOM_AGENTS
+    original_agent = next((a for a in all_agents if a.id == agent_id), None)
+    if not original_agent:
+        raise HTTPException(status_code=404, detail="Agente não encontrado")
+    
+    # Criar nova instância
+    new_agent = Agent(
+        name=f"{original_agent.name} - Cópia",
+        type=original_agent.type,
+        isDefault=False,
+        systemPrompt=original_agent.systemPrompt,
+        tools=original_agent.tools.copy()
+    )
+    
+    # Gerar novo ID
+    max_id = max([a.id for a in all_agents if a.id], default=0)
+    new_agent.id = max_id + 1
+    
+    CUSTOM_AGENTS.append(new_agent)
+    return new_agent
 
 if __name__ == "__main__":
-    # Initialize database when module is run directly
-    initialize_database()
-    create_default_agents()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8003)

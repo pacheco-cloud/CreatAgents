@@ -1,25 +1,22 @@
-# apps/services/*/Dockerfile - Use este para todos os serviços backend
-FROM python:3.11-slim
+FROM python:3.11-alpine
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# Install system dependencies
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        build-essential \
-        curl \
-        libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Install system dependencies (mínimas)
+RUN apk add --no-cache \
+    gcc \
+    musl-dev \
+    && rm -rf /var/cache/apk/*
 
-# Create and set working directory
+# Create working directory
 WORKDIR /app
 
 # Create non-root user
-RUN addgroup --system --gid 1001 python \
-    && adduser --system --uid 1001 --gid 1001 python
+RUN addgroup -g 1001 -S python \
+    && adduser -u 1001 -S python -G python
 
 # Install Python dependencies
 COPY requirements.txt .
@@ -35,17 +32,8 @@ RUN chown -R python:python /app
 # Switch to non-root user
 USER python
 
+# Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
 # Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-# Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

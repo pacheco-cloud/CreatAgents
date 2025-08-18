@@ -7,7 +7,7 @@ import json
 app = FastAPI(title="Calendar Service", version="1.0.0")
 
 class Event(BaseModel):
-    id: int
+    id: str
     title: str
     date: str
     color: str

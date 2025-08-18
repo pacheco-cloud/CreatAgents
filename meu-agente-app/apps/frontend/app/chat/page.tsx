@@ -10,15 +10,15 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 
 // Dados mock para demonstração
 const personalCalendarEvents = [
-  { id: 1, title: 'Aniversário da cidade', date: '2025-01-20', color: '#22c55e' },
-  { id: 2, title: 'Reunião família', date: '2025-01-19', color: '#22c55e' },
-  { id: 3, title: 'Dentista', date: '2025-01-21', color: '#22c55e' },
+  { id: "1", title: 'Aniversário da cidade', date: '2025-01-20', color: '#22c55e' },
+  { id: "2", title: 'Reunião família', date: '2025-01-19', color: '#22c55e' },
+  { id: "3", title: 'Dentista', date: '2025-01-21', color: '#22c55e' },
 ]
 
 const professionalCalendarEvents = [
-  { id: 1, title: 'Reunião equipe', date: '2025-01-20', color: '#3b82f6' },
-  { id: 2, title: 'Apresentação projeto', date: '2025-01-21', color: '#3b82f6' },
-  { id: 3, title: 'Call cliente', date: '2025-01-19', color: '#3b82f6' },
+  { id: "1", title: 'Reunião equipe', date: '2025-01-20', color: '#3b82f6' },
+  { id: "2", title: 'Apresentação projeto', date: '2025-01-21', color: '#3b82f6' },
+  { id: "3", title: 'Call cliente', date: '2025-01-19', color: '#3b82f6' },
 ]
 
 interface Message {
