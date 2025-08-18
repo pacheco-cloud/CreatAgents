@@ -17,7 +17,7 @@ interface Tool {
 interface Agent {
   id?: number
   name: string
-  type: 'Pessoal' | 'Profissional'
+  type: string  // Permitir qualquer string em vez de apenas 'Pessoal' | 'Profissional'
   isDefault: boolean
   systemPrompt: string
   tools: Tool[]
@@ -103,7 +103,16 @@ export default function SettingsPage() {
         } else {
           const errorData = await response.json()
           console.error('❌ Erro ao atualizar agente:', errorData)
-          alert(`Erro ao atualizar agente: ${errorData.detail || 'Erro desconhecido'}`)
+          
+          // Tratar erros de validação do Pydantic
+          if (errorData.detail && Array.isArray(errorData.detail)) {
+            const validationErrors = errorData.detail.map((err: any) => 
+              `${err.loc.join('.')}: ${err.msg}`
+            ).join('\n')
+            alert(`Erro de validação:\n${validationErrors}`)
+          } else {
+            alert(`Erro ao atualizar agente: ${errorData.detail || JSON.stringify(errorData)}`)
+          }
         }
       } else {
         // Criar novo agente (POST)
@@ -128,7 +137,16 @@ export default function SettingsPage() {
         } else {
           const errorData = await response.json()
           console.error('❌ Erro ao criar agente:', errorData)
-          alert(`Erro ao criar agente: ${errorData.detail || 'Erro desconhecido'}`)
+          
+          // Tratar erros de validação do Pydantic
+          if (errorData.detail && Array.isArray(errorData.detail)) {
+            const validationErrors = errorData.detail.map((err: any) => 
+              `${err.loc.join('.')}: ${err.msg}`
+            ).join('\n')
+            alert(`Erro de validação:\n${validationErrors}`)
+          } else {
+            alert(`Erro ao criar agente: ${errorData.detail || JSON.stringify(errorData)}`)
+          }
         }
       }
 
@@ -406,15 +424,14 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2">Tipo</label>
-                  <select
-                    value={editingAgent?.type || 'Pessoal'}
-                    onChange={(e) => setEditingAgent({ ...editingAgent, type: e.target.value as 'Pessoal' | 'Profissional' })}
+                  <input
+                    type="text"
+                    value={editingAgent?.type || ''}
+                    onChange={(e) => setEditingAgent({ ...editingAgent, type: e.target.value })}
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Ex: Pessoal, Profissional, Pesquisa, Educacional, etc."
                     disabled={isLoading}
-                  >
-                    <option value="Pessoal">Pessoal</option>
-                    <option value="Profissional">Profissional</option>
-                  </select>
+                  />
                 </div>
               </div>
 

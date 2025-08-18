@@ -1,11 +1,15 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import httpx
 import os
 from typing import Dict, Any
+import logging
 
 app = FastAPI(title="API Gateway", version="1.0.0")
+logger = logging.getLogger("uvicorn")
+logger.setLevel(logging.DEBUG)
 
 # CORS para permitir requests do frontend
 app.add_middleware(
@@ -18,10 +22,10 @@ app.add_middleware(
 
 # Configuração dos microserviços
 SERVICES = {
-    "orchestrator": "http://localhost:8001",
-    "calendar": "http://localhost:8002",
-    "settings": "http://localhost:8003",
-    "tool-factory": "http://localhost:8004"
+    "orchestrator": "http://orchestrator-agent:8001",
+    "calendar": "http://calendar-service:8002",
+    "settings": "http://user-settings-service:8004",
+    "tool-factory": "http://tool-factory-service:8005"
 }
 
 class ChatMessage(BaseModel):
@@ -31,7 +35,7 @@ class ChatMessage(BaseModel):
 class AgentConfig(BaseModel):
     name: str
     type: str
-    system_prompt: str
+    systemPrompt: str
     tools: list
 
 @app.get("/health")
@@ -54,25 +58,49 @@ async def chat_endpoint(request: ChatMessage):
 @app.get("/agents")
 async def get_agents():
     """Lista todos os agentes configurados"""
+    print(f"[DEBUG] Iniciando requisição para: {SERVICES['settings']}/agents")
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            print("[DEBUG] Cliente HTTP criado, fazendo requisição...")
             response = await client.get(f"{SERVICES['settings']}/agents")
-            return response.json()
-    except httpx.RequestError:
+            print(f"[DEBUG] Resposta recebida - Status: {response.status_code}")
+            print(f"[DEBUG] Conteúdo da resposta: {response.text[:500]}...")
+            response.raise_for_status()
+            data = response.json()
+            print(f"[DEBUG] JSON parseado com sucesso: {len(data) if isinstance(data, list) else 'objeto'}")
+            return JSONResponse(content=data)
+    except httpx.TimeoutException as e:
+        print(f"[ERROR] Timeout ao conectar com settings-service: {e}")
+        raise HTTPException(status_code=503, detail="Settings service timeout")
+    except httpx.ConnectError as e:
+        print(f"[ERROR] Erro de conexão com settings-service: {e}")
         raise HTTPException(status_code=503, detail="Settings service unavailable")
+    except Exception as e:
+        print(f"[ERROR] Erro inesperado ao buscar agentes: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=503, detail=f"Settings service unavailable: {e}")
 
 @app.post("/agents")
 async def create_agent(agent_config: AgentConfig):
     """Cria um novo agente"""
+    print(f"[DEBUG] Criando agente: {agent_config.name}")
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
                 f"{SERVICES['settings']}/agents",
                 json=agent_config.dict()
             )
-            return response.json()
-    except httpx.RequestError:
+            print(f"[DEBUG] Resposta criação agente - Status: {response.status_code}")
+            response.raise_for_status()
+            return JSONResponse(content=response.json())
+    except httpx.TimeoutException as e:
+        print(f"[ERROR] Timeout ao criar agente: {e}")
+        raise HTTPException(status_code=503, detail="Settings service timeout")
+    except httpx.ConnectError as e:
+        print(f"[ERROR] Erro de conexão ao criar agente: {e}")
         raise HTTPException(status_code=503, detail="Settings service unavailable")
+    except Exception as e:
+        print(f"[ERROR] Erro inesperado ao criar agente: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=503, detail=f"Settings service unavailable: {e}")
 
 @app.get("/calendar/{calendar_type}")
 async def get_calendar(calendar_type: str):
