@@ -33,7 +33,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [activeAgent, setActiveAgent] = useState('master')
+  const [activeAgent, setActiveAgent] = useState('Assistente Geral')
   const [showCanvas, setShowCanvas] = useState(false)
   const [canvasContent, setCanvasContent] = useState<'personal' | 'professional' | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -58,39 +58,60 @@ export default function ChatPage() {
     
     setMessages(prev => [...prev, userMessage])
     
-    // Simular processamento
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    let response = ''
-    let agent = 'master'
-    
-    const msg = message.toLowerCase()
-    
-    if (msg.includes('agenda pessoal') || msg.includes('pessoal')) {
-      agent = 'Calendário Pessoal'
-      response = 'Consultando sua agenda pessoal... Encontrei seus próximos compromissos!'
-      setCanvasContent('personal')
-      setShowCanvas(true)
-    } else if (msg.includes('agenda profissional') || msg.includes('profissional')) {
-      agent = 'Calendário Profissional'
-      response = 'Verificando sua agenda profissional... Aqui estão suas reuniões!'
-      setCanvasContent('professional')
-      setShowCanvas(true)
-    } else {
-      response = 'Olá! Posso ajudar com sua agenda pessoal ou profissional. O que você gostaria de consultar?'
+    try {
+      // Chamar o orquestrador através do API Gateway diretamente
+      const response = await fetch('http://localhost:8000/api/chat/process', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: message,
+          user_id: 'default_user'
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Erro na resposta do servidor')
+      }
+      
+      const data = await response.json()
+      
+      // Atualizar estado baseado na resposta do orquestrador
+      setActiveAgent(data.agent_used || 'Assistente Geral')
+      
+      if (data.show_canvas && data.canvas_type) {
+        setCanvasContent(data.canvas_type)
+        setShowCanvas(true)
+      } else {
+        setShowCanvas(false)
+      }
+      
+      const botMessage: Message = {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: data.response,
+        agent: data.agent_used,
+        timestamp: new Date()
+      }
+      
+      setMessages(prev => [...prev, botMessage])
+      
+    } catch (error) {
+      console.error('Erro ao processar mensagem:', error)
+      
+      // Fallback em caso de erro
+      const errorMessage: Message = {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.',
+        agent: 'Sistema',
+        timestamp: new Date()
+      }
+      
+      setMessages(prev => [...prev, errorMessage])
     }
     
-    setActiveAgent(agent)
-    
-    const botMessage: Message = {
-      id: Date.now() + 1,
-      type: 'bot',
-      content: response,
-      agent,
-      timestamp: new Date()
-    }
-    
-    setMessages(prev => [...prev, botMessage])
     setIsLoading(false)
   }
 
@@ -127,7 +148,7 @@ export default function ChatPage() {
                   <h1 className="text-xl font-bold">Chat Multi-Agente</h1>
                   <div className="flex items-center space-x-2 mt-2">
                     <div className={`w-3 h-3 rounded-full bg-${getAgentColor(activeAgent)}-400`}></div>
-                    <span className="text-sm">{activeAgent === 'master' ? 'Agente Master' : activeAgent} ativo</span>
+                    <span className="text-sm">{activeAgent} ativo</span>
                   </div>
                 </div>
                 <Link href="/settings" className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors">

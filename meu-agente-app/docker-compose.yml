@@ -102,23 +102,6 @@ services:
       - backend
     restart: unless-stopped
 
-  # Tool Factory Service
-  tool-factory-service:
-    build:
-      context: ./apps/services/tool-factory-service
-      dockerfile: Dockerfile
-    container_name: agente-tool-factory
-    environment:
-      - DATABASE_URL=postgresql://agente_user:agente_pass@postgres:5432/agente_db
-      - ENVIRONMENT=production
-    ports:
-      - "8005:8004"
-    depends_on:
-      - postgres
-    networks:
-      - backend
-    restart: unless-stopped
-
   # API Gateway
   api-gateway:
     build:
@@ -129,7 +112,6 @@ services:
       ORCHESTRATOR_URL: http://orchestrator-agent:8001
       CALENDAR_URL: http://calendar-service:8002
       SETTINGS_URL: http://user-settings-service:8004
-      TOOL_FACTORY_URL: http://tool-factory-service:8005
       ENVIRONMENT: production
     ports:
       - "8000:8000"
@@ -137,7 +119,6 @@ services:
       - orchestrator-agent
       - user-settings-service
       - calendar-service
-      - tool-factory-service
     networks:
       - backend
       - frontend
@@ -149,10 +130,10 @@ services:
       context: ./apps/frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:8000
+        - NEXT_PUBLIC_API_URL=http://api-gateway:8000
     container_name: agente-frontend
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://api-gateway:8000
       - NODE_ENV=production
     ports:
       - "3000:3000"

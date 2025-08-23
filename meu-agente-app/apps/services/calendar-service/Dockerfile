@@ -16,8 +16,8 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # Create non-root user
-RUN addgroup -g 1001 -S python \
-    && adduser -u 1001 -S python -G python
+RUN addgroup -g 1001 -S appuser \
+    && adduser -u 1001 -S appuser -G appuser
 
 # Install Python dependencies
 COPY requirements.txt .
@@ -27,11 +27,11 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy source code
 COPY . .
 
-# Change ownership to python user
-RUN chown -R python:python /app
+# Change ownership to appuser user
+RUN chown -R appuser:appuser /app
 
 # Switch to non-root user
-USER python
+USER appuser
 
 # Expose port
 EXPOSE 8002

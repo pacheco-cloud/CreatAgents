@@ -59,7 +59,7 @@ export default function SettingsPage() {
   const openCreateModal = () => {
     setEditingAgent({
       name: '',
-      type: 'Pessoal',
+      type: 'Calendário',
       isDefault: false,
       systemPrompt: '',
       tools: [{
@@ -309,11 +309,7 @@ export default function SettingsPage() {
                   <div>
                     <h3 className="font-semibold text-lg">{agent.name}</h3>
                     <div className="flex items-center space-x-2 mt-1">
-                      <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                        agent.type === 'Pessoal' 
-                          ? 'bg-green-900 text-green-300' 
-                          : 'bg-blue-900 text-blue-300'
-                      }`}>
+                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300">
                         {agent.type}
                       </span>
                       {agent.isDefault && (
@@ -429,7 +425,7 @@ export default function SettingsPage() {
                     value={editingAgent?.type || ''}
                     onChange={(e) => setEditingAgent({ ...editingAgent, type: e.target.value })}
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Ex: Pessoal, Profissional, Pesquisa, Educacional, etc."
+                    placeholder="Ex: Calendário, Pesquisa, Educacional, Suporte, etc."
                     disabled={isLoading}
                   />
                 </div>

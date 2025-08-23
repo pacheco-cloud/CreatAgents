@@ -14,7 +14,7 @@ logger.setLevel(logging.DEBUG)
 # CORS para permitir requests do frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://frontend:3000", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -24,8 +24,7 @@ app.add_middleware(
 SERVICES = {
     "orchestrator": "http://orchestrator-agent:8001",
     "calendar": "http://calendar-service:8002",
-    "settings": "http://user-settings-service:8004",
-    "tool-factory": "http://tool-factory-service:8005"
+    "settings": "http://user-settings-service:8004"
 }
 
 class ChatMessage(BaseModel):
@@ -45,6 +44,19 @@ async def health_check():
 @app.post("/chat")
 async def chat_endpoint(request: ChatMessage):
     """Rota principal para o chat - encaminha para o orquestrador"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{SERVICES['orchestrator']}/process",
+                json=request.dict()
+            )
+            return response.json()
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Orchestrator service unavailable: {e}")
+
+@app.post("/api/chat/process")
+async def chat_process_endpoint(request: ChatMessage):
+    """Rota alternativa para o chat - encaminha para o orquestrador"""
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(

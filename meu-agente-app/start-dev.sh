@@ -42,9 +42,6 @@ CALENDAR_PID=$!
 cd ../user-settings-service && python main.py &
 SETTINGS_PID=$!
 
-cd ../tool-factory-service && python main.py &
-FACTORY_PID=$!
-
 cd ../../../
 
 echo "✅ Todos os serviços iniciados!"
@@ -60,7 +57,7 @@ echo "💡 Para parar todos os serviços, pressione Ctrl+C"
 cleanup() {
     echo ""
     echo "🛑 Parando todos os serviços..."
-    kill $FRONTEND_PID $API_GATEWAY_PID $ORCHESTRATOR_PID $CALENDAR_PID $SETTINGS_PID $FACTORY_PID 2>/dev/null
+    kill $FRONTEND_PID $API_GATEWAY_PID $ORCHESTRATOR_PID $CALENDAR_PID $SETTINGS_PID 2>/dev/null
     echo "✅ Serviços parados!"
     exit 0
 }
